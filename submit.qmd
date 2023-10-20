@@ -91,9 +91,11 @@ Access to high quality healthcare is an integral aspect of public health. Ensuri
 
 # Methods:
 
-Three data sets were selected from the California Health and Human Services (CalHHS) website: Rates of Preventable hospitalizations for selected conditions, Modified retail food environment index, and primary care shortage areas. These data sets are open access and downloaded in .csv or .xlsx format and then imported to RStudio for processing. The three data sets were then combined based on county. Exploratory data analysis was conducted, removing "NA" values, as well as state-wide summary values. The packages Tidyverse, Dplyr, Data.Table, and ggplot2 were used for data exploration. Within each dataset, key variables were identified for analysis. In the Preventable hospitalizations dataset, PQIDescription, count_ICD9 and 10, Population_ICD9 and 10, RiskAdjRate_ICD9 and 10 were identified. Observations had either ICD9 or ICD 10 codes recorded. Observations with "NA" for PQI description were removed, and PQI description matching a diabetes-related complication (short-term, long-term complications, uncontrolled diabetes, and amputation related to diabetes) were selected. Under the food environment index, the numerator (number of healthy food stores), denominator (total number of food stores, healthy and unhealthy) and estimate (numerator / denominator \*100) by county were selected. For Primary care shortages, provider:population ratio, the ratio score, poverty scores, and overall aggregate primary care shortage and poverty scores were selected by county.
+Three data sets were selected from the California Health and Human Services (CalHHS) website: Rates of Preventable hospitalizations for selected conditions, Modified retail food environment index, and primary care shortage areas. These data sets are open access and downloaded in .csv or .xlsx format and then imported to RStudio for processing. The three data sets were then combined based on county. Exploratory data analysis was conducted, removing "NA" values, as well as state-wide summary values. The packages Tidyverse, Dplyr, Data.Table, and ggplot2 were used for data exploration. Within each dataset, key variables were identified for analysis. In the Preventable hospitalizations dataset, PQIDescription, count_ICD9 and 10, Population_ICD9 and 10, RiskAdjRate_ICD9 and 10 were identified. Observations had either ICD9 or ICD 10 codes recorded. Observations with "NA" for PQI description were removed, and PQI description matching a diabetes-related complication (short-term, long-term complications, uncontrolled diabetes, and amputation related to diabetes) were selected. Under the food environment index, the numerator (number of healthy food stores), denominator (total number of food stores, healthy and unhealthy) and estimate (numerator / denominator \*100) by county were selected. For Primary care shortages, population:provider ratio, the ratio score, poverty scores, and overall aggregate primary care shortage and poverty scores were selected by county.
 
-In the Exploratory Data analysis, data were successfully read in to R and inspected for completeness and consistency with known data, as well as implausible numbers, particularly in the key variables. Preventable hospitalization and Food Environment had 59 unique entries for the "County" variable, though there are only 58 counties in California. Preventable hospitalization included a "STATEWIDE" observation, and Food environment included "NA" as an observation. These were removed from analysis.
+In the Exploratory Data analysis, data were successfully read in to R and inspected for completeness and consistency with known data, as well as implausible numbers, particularly in the key variables. Preventable hospitalization and Food Environment had 59 unique entries for the "County" variable, though there are only 58 counties in California. Preventable hospitalization included a "STATEWIDE" observation, and Food environment included "NA" as an observation. These were removed from analysis. Within the Preventable Hospitalizations dataset, the counts of ICD10 diagnosis on admission were categorized as a "character" variable - this was changed to numeric.
+
+In the data wrangling section of analysis, the healthy food environment dataset was subset for key variables, grouped by county. Preventable hospitalizations were filtered for the year 2017 to match the healthy food data,
 
 EDA and Wrangling
 
@@ -104,7 +106,8 @@ food <- HealthyFood %>%
   select(!race_eth_code:race_eth_name) %>% 
   select(!county_fips:strata_two_name) %>% 
   select(!ca_decile:version) %>% 
-  filter(geotype == "CO")
+  filter(geotype == "CO") %>% 
+  rename(county = county_name)
 ```
 
 ```{r}
@@ -114,9 +117,21 @@ hosp <- PrevHosp %>%
   filter(Year == 2017) %>% 
   filter(County != "STATEWIDE") %>% 
   mutate(Count_ICD10 = as.numeric(gsub(",", "", Count_ICD10))) %>% 
-  mutate(Population_ICD10 = as.numeric(gsub(",", "", Population_ICD10)))
+  mutate(Population_ICD10 = as.numeric(gsub(",", "", Population_ICD10))) %>% 
+  rename(county = County)
   
   
+```
+
+```{r}
+hosp20 <- PrevHosp %>% 
+  select(!Count_ICD9:RiskAdjRate_ICD9) %>% 
+  select(!AnnotationCode:AnnotationDesc) %>% 
+  filter(Year == 2020) %>% 
+  filter(County != "STATEWIDE") %>% 
+  mutate(Count_ICD10 = as.numeric(gsub(",", "", Count_ICD10))) %>% 
+  mutate(Population_ICD10 = as.numeric(gsub(",", "", Population_ICD10))) %>% 
+  rename(county = County)
 ```
 
 ```{r}
@@ -143,17 +158,25 @@ hospHTN <- hosp %>%
 pcp <- PrimCareShort %>% 
   select(!MSSA_ID:EST_FNPPA) %>% 
   select(!PCSA) %>% 
-  filter(!is.na(MSSA_COUNTY))
+  filter(!is.na(MSSA_COUNTY)) %>% 
+  rename(county = MSSA_COUNTY)
 ```
 
 ```{r}
 pcp <- pcp %>% 
-  group_by(MSSA_COUNTY) %>% 
+  group_by(county) %>% 
   summarize(Average_ProviderRatio = mean(Provider_Ratio, na.rm = TRUE), 
             Average_Score_Provider = mean(Score_Provider_Ratio, na.rm = TRUE), 
             Average_Pct_100FPL = mean(PCT_100FPL, na.rm = TRUE), 
             Average_Score_Poverty = mean(Score_Poverty, na.rm = TRUE), 
             Average_Score_Total = mean(Score_Total, na.rm = TRUE))
+```
 
+Merge data:
+
+```{r}
+hospDMamp <- hospDMamp %>% 
+  full_join(pcp, by = "county") %>% 
+  full_join(food, by = "county")
 
 ```
