@@ -1,28 +1,159 @@
 ---
-title: ""
-author: ""
+title: "Midterm"
+author: "Sean Kim"
 format:
   html:
     embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(readxl)
 ```
 
-You can add options to executable code like this
-
 ```{r}
-#| echo: false
-2 * 2
+if (!file.exists("ca-hcai-preventablehospitalizations-county")) 
+  download.file( 
+    url = "https://data.chhs.ca.gov/dataset/f2b33545-db0a-4a53-a611-41de532e7c53/resource/7c7aed93-3643-43b8-92fc-324bf8fc13f2/download/ca-hcai-preventablehospitalizations-county.csv", 
+    destfile = "ca-hcai-preventablehospitalizations-county", 
+    method = "libcurl", 
+    timeout = 1000 )
+
+
+PrevHosp <- fread("ca-hcai-preventablehospitalizations-county") 
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+if (!file.exists("pcsa")) 
+  download.file( 
+    url = "https://data.chhs.ca.gov/dataset/061494a3-e8c7-4615-a22f-b2851d44eb09/resource/0ba7c904-2302-400a-ba27-b8e8e5c1ab4a/download/pcsa.csv", 
+    destfile = "pcsa", 
+    method = "libcurl", 
+    timeout = 1000 )
+
+
+PrimCareShort <- fread("pcsa") 
+```
+
+```{r}
+if (!file.exists("hciretailfoodenvironment75cacoreplct201715nov17")) 
+  download.file( 
+    url = "https://data.chhs.ca.gov/dataset/714a9d67-3291-447b-94b9-9d3e1063d176/resource/c58c1b68-6545-4039-bc52-6facf120a4c7/download/hciretailfoodenvironment75cacoreplct201715nov17.xlsx", 
+    destfile = "hciretailfoodenvironment75cacoreplct201715nov17", 
+    method = "libcurl", 
+    timeout = 1000 )
+
+
+HealthyFood <- read_xlsx("hciretailfoodenvironment75cacoreplct201715nov17") 
+```
+
+Question? - Is lack of healthy food options associated with increased preventable hospitalization for diabetes? - sub questions - association with short term/long term complications, heart disease, hypertension, amputation? - Is shortage of primary care providers in an area associated with increased preventable hospitalizations? - kinda all the metrics - asthma, copd, diabetes, heart disease complications.
+
+First question: food vs preventable hospitalization
+
+-   key variables for food - county_name, numerator, denominator, estimate
+
+-   key variables for prevhosp - county, PQIDescription, count_ICD9, Population_ICD9, RiskAdjRate_ICD9 (or 10)
+
+-   key variables for primary care - MSSA_COUNTY, provider_ratio, score_provider_ratio, score_poverty, score_total
+
+Need to do:
+
+-   EDA of all three datasets - clean up NA's, implausible numbers
+
+-   Averages for key variables by county
+
+-   Merge by county - want to have average key variables by county (should have fewer observations
+
+-   Visualization -
+
+    -   bar graphs for average
+
+    -   scatter plot - distribution of counties by x = primcare shortage score, y = prevhosp
+
+        -   scatter plot - x = healthy food score, y = prevhosp
+
+-   Stats -
+
+    -   Linear regression - continuous x continuous
+
+    -   multivariate regression
+
+    -   
+
+# Introduction:
+
+Access to high quality healthcare is an integral aspect of public health. Ensuring equitable access to such care has been a mission of many public health policies over the years. One measure of access to healthcare is preventable hospitalizations. Individuals with chronic conditions such as diabetes, heart disease, asthma, and chronic obstructive pulmonary disease (COPD) depend on outpatient primary care to keep their conditions under control. With poor access to primary care, these individuals may be forced to travel far for their necessary care or simply deal with their condition until they experience an exacerbation and require hospitalization. Such hospitalizations are considered preventable with proper access to appropriate outpatient care. In California, the California Health and Human Services department records data tracking preventable hospitalization rates for ten of the most common conditions managed in the outpatient setting. In addition to preventable hospitalization, CalHHS has also collected data on healthy food options and primary care shortage metrics on a county-wide, city-wide, and district-wide basis. With these available data, I formulated the following questions: Is the lack of healthy food options associated with increased preventable hospitalizations? Is a shortage of primary care providers in an area associated with increased preventable hospitalizations? In greater depth, I am specifically interested in diabetes management. I hypothesize that fewer healthy food options and a lower primary care provider - population ratio will be associated with a higher rate of preventable hospitalization due to diabetes complications.
+
+# Methods:
+
+Three data sets were selected from the California Health and Human Services (CalHHS) website: Rates of Preventable hospitalizations for selected conditions, Modified retail food environment index, and primary care shortage areas. These data sets are open access and downloaded in .csv or .xlsx format and then imported to RStudio for processing. The three data sets were then combined based on county. Exploratory data analysis was conducted, removing "NA" values, as well as state-wide summary values. The packages Tidyverse, Dplyr, Data.Table, and ggplot2 were used for data exploration. Within each dataset, key variables were identified for analysis. In the Preventable hospitalizations dataset, PQIDescription, count_ICD9 and 10, Population_ICD9 and 10, RiskAdjRate_ICD9 and 10 were identified. Observations had either ICD9 or ICD 10 codes recorded. Observations with "NA" for PQI description were removed, and PQI description matching a diabetes-related complication (short-term, long-term complications, uncontrolled diabetes, and amputation related to diabetes) were selected. Under the food environment index, the numerator (number of healthy food stores), denominator (total number of food stores, healthy and unhealthy) and estimate (numerator / denominator \*100) by county were selected. For Primary care shortages, provider:population ratio, the ratio score, poverty scores, and overall aggregate primary care shortage and poverty scores were selected by county.
+
+In the Exploratory Data analysis, data were successfully read in to R and inspected for completeness and consistency with known data, as well as implausible numbers, particularly in the key variables. Preventable hospitalization and Food Environment had 59 unique entries for the "County" variable, though there are only 58 counties in California. Preventable hospitalization included a "STATEWIDE" observation, and Food environment included "NA" as an observation. These were removed from analysis.
+
+EDA and Wrangling
+
+```{r}
+food <- HealthyFood %>% 
+  select(!ind_id:ind_definition) %>% 
+  select(!geotypevalue:geoname) %>% 
+  select(!race_eth_code:race_eth_name) %>% 
+  select(!county_fips:strata_two_name) %>% 
+  select(!ca_decile:version) %>% 
+  filter(geotype == "CO")
+```
+
+```{r}
+hosp <- PrevHosp %>% 
+  select(!Count_ICD9:RiskAdjRate_ICD9) %>% 
+  select(!AnnotationCode:AnnotationDesc) %>% 
+  filter(Year == 2017) %>% 
+  filter(County != "STATEWIDE") %>% 
+  mutate(Count_ICD10 = as.numeric(gsub(",", "", Count_ICD10))) %>% 
+  mutate(Population_ICD10 = as.numeric(gsub(",", "", Population_ICD10)))
+  
+  
+```
+
+```{r}
+hospDMshort <- hosp %>% 
+  filter(PQIDescription == "Diabetes Short-term Complications")
+
+hospDMlong <- hosp %>% 
+  filter(PQIDescription == "Diabetes Long-term Complications")
+
+hospDMuncont <- hosp %>% 
+  filter(PQIDescription == "Uncontrolled Diabetes")
+
+hospDMamp <- hosp %>% 
+  filter(PQIDescription == "Lower-Extremity Amputation (Diabetes)")
+
+hospHeart <- hosp %>% 
+  filter(PQIDescription == "Heart Failure")
+
+hospHTN <- hosp %>% 
+  filter(PQIDescription == "Hypertension")
+```
+
+```{r}
+pcp <- PrimCareShort %>% 
+  select(!MSSA_ID:EST_FNPPA) %>% 
+  select(!PCSA) %>% 
+  filter(!is.na(MSSA_COUNTY))
+```
+
+```{r}
+pcp <- pcp %>% 
+  group_by(MSSA_COUNTY) %>% 
+  summarize(Average_ProviderRatio = mean(Provider_Ratio, na.rm = TRUE), 
+            Average_Score_Provider = mean(Score_Provider_Ratio, na.rm = TRUE), 
+            Average_Pct_100FPL = mean(PCT_100FPL, na.rm = TRUE), 
+            Average_Score_Poverty = mean(Score_Poverty, na.rm = TRUE), 
+            Average_Score_Total = mean(Score_Total, na.rm = TRUE))
+
+
+```
